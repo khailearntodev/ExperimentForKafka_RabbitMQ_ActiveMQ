@@ -1,0 +1,10 @@
+broker,scenario,run,avg_latency_ms,p95_latency_ms,throughput,error_rate,retry_success_rate
+rabbitmq,test3,1,2.16,2.96,3510.47,0,100
+rabbitmq,test3,2,2.22,3.17,3467.25,0,100
+rabbitmq,test3,3,3.29,6.09,2340.05,0,100
+activemq,test3,1,4.54,5.81,1773.63,0,100
+activemq,test3,2,4.48,5.87,1833.89,0,100
+activemq,test3,3,3.65,4.4,2195.01,0,100
+kafka,test3,1,5.51,9.56,1343.27,0,97.56
+kafka,test3,2,5.17,13.18,1512.9,0,92.31
+kafka,test3,3,3.98,6.23,2055.93,0,96.3

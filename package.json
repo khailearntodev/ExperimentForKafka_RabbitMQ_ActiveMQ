@@ -1,0 +1,32 @@
+{
+  "name": "techlab-mq-experiment",
+  "version": "1.0.0",
+  "description": "Message Queue PoC & Benchmark comparing RabbitMQ, ActiveMQ, and Kafka for Techlab Dev Interview 2026",
+  "main": "dist/order-service/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start:order": "tsx src/order-service/server.ts",
+    "start:worker": "tsx src/payment-worker/worker.ts",
+    "start:sync-order": "tsx src/sync-baseline/sync-order-service.ts",
+    "start:sync-payment": "tsx src/sync-baseline/sync-payment-service.ts"
+  },
+  "keywords": ["rabbitmq", "activemq", "kafka", "benchmark", "poc"],
+  "author": "Techlab Candidate",
+  "license": "ISC",
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "kafkajs": "^2.2.4",
+    "stompit": "^1.0.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.5",
+    "@types/node": "^20.14.0",
+    "@types/stompit": "^0.26.6",
+    "@types/uuid": "^9.0.8",
+    "tsx": "^4.16.2",
+    "typescript": "^5.4.5"
+  }
+}

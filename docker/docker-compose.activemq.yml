@@ -1,0 +1,15 @@
+services:
+  activemq:
+    image: apache/activemq-classic:5.18.3
+    container_name: techlab-activemq
+    ports:
+      - "61616:61616"   # OpenWire
+      - "61613:61613"   # STOMP protocol
+      - "8161:8161"     # Web Console (admin / admin)
+    environment:
+      ACTIVEMQ_USERS_admin: admin
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 61613 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

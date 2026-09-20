@@ -1,0 +1,11 @@
+broker,scenario,avg_latency_ms,p95_latency_ms,throughput,error_rate,retry_success_rate
+rabbitmq,test1,17.28,23.86,2778.92,0.00,100.00
+rabbitmq,test2,7.21,9.23,6139.06,0.00,100.00
+rabbitmq,test3,2.56,4.07,3105.92,0.00,100.00
+activemq,test1,43.84,51.91,1092.11,0.00,100.00
+activemq,test2,33.38,39.48,1421.53,0.00,100.00
+activemq,test3,4.22,5.36,1934.18,0.00,100.00
+kafka,test1,40.80,68.41,1345.43,0.00,100.00
+kafka,test2,20.72,33.86,2258.77,0.00,100.00
+kafka,test3,4.89,9.66,1637.37,0.00,95.39
+synchronous-http,test2,3019.87,3052.33,16.54,0.00,100.00

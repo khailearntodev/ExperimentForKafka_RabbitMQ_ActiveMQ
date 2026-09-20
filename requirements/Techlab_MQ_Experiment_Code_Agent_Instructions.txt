@@ -1,0 +1,500 @@
+TECHLAB DEV INTERVIEW 2026
+MESSAGE QUEUE POC & BENCHMARK
+INSTRUCTIONS FOR CODE AGENT
+
+1. OBJECTIVE
+Build a small, reproducible Proof of Concept to compare:
+- RabbitMQ
+- Apache ActiveMQ
+- Apache Kafka
+
+The goal is NOT to build a complete e-commerce system.
+
+The PoC must answer:
+- Does asynchronous messaging solve the main problem in the task?
+- How do the three brokers behave under the same workload?
+- Which solution is the best fit for the stated requirements?
+
+Do not assume a winner before testing.
+
+2. SOURCE SITUATION
+System:
+- ~500,000 registered users
+- ~50,000 DAU
+- ~3,000–5,000 orders/day
+- Expected growth: 3–5x in 12–18 months
+- Microservices, Docker, Kubernetes
+
+Main services:
+- API Gateway
+- Order Service
+- Payment Service
+- Inventory Service
+- Notification Service
+- Analytics Service
+
+Current communication:
+- Synchronous HTTP REST.
+
+Problems from the task:
+- Order creation may time out when Payment is slow/unavailable.
+- Notification increases Order response time.
+- Analytics can degrade performance during traffic spikes.
+- Services are tightly coupled.
+- Retry logic is complex and duplicated.
+
+Relevant requirements:
+- Order Service must respond quickly without being blocked by downstream services.
+- Payment may be slow/fail and requires retry.
+- Inventory is sensitive to race conditions under high concurrency.
+- Notification does not require strict real-time delivery.
+- Analytics must not affect the critical user flow.
+
+3. EXPERIMENT SCOPE
+Keep the PoC small.
+
+Implement only:
+1. Order Service
+2. Payment Worker/Service
+3. One broker at a time:
+   - RabbitMQ
+   - ActiveMQ
+   - Kafka
+4. Load generator / benchmark tool
+
+Do NOT build full Inventory, Notification, Analytics, API Gateway, database,
+or Kubernetes implementations for the PoC.
+
+The experiment focuses on:
+- Order not being blocked by slow Payment.
+- Payment failure and retry.
+- Basic message processing performance.
+
+4. HIGH-LEVEL ARCHITECTURE
+
+                    +------------------+
+                    |  Load Generator  |
+                    |      (k6)        |
+                    +--------+---------+
+                             |
+                             | POST /orders
+                             v
+                    +------------------+
+                    |   Order Service  |
+                    +--------+---------+
+                             |
+                             | OrderCreated
+                             v
+                    +------------------+
+                    | Message Broker   |
+                    | RabbitMQ /       |
+                    | ActiveMQ / Kafka |
+                    +--------+---------+
+                             |
+                             | consume
+                             v
+                    +------------------+
+                    | Payment Worker   |
+                    +--------+---------+
+                             |
+                             v
+                    +------------------+
+                    | Mock Payment     |
+                    | Processing Logic |
+                    +------------------+
+
+Order Service MUST NOT synchronously call Payment.
+
+Expected flow:
+Client -> Order Service -> publish message -> HTTP 202 response
+-> Payment Worker consumes -> Payment processes asynchronously.
+
+Payment must support:
+- normal processing
+- configurable delay
+- controlled failure followed by retry
+
+5. APPLICATION DESIGN
+
+5.1 Order Service
+Expose:
+POST /orders
+
+Example request:
+{
+  "orderId": "ORD-001",
+  "userId": "USER-001",
+  "amount": 100000
+}
+
+Behavior:
+1. Receive request.
+2. Create OrderCreated event.
+3. Publish to broker.
+4. Do not wait for payment.
+5. Return HTTP 202 Accepted.
+
+Example response:
+{
+  "orderId": "ORD-001",
+  "status": "PROCESSING"
+}
+
+5.2 OrderCreated message
+Use the same payload for all brokers:
+
+{
+  "eventId": "UUID",
+  "orderId": "ORD-001",
+  "userId": "USER-001",
+  "amount": 100000,
+  "eventType": "ORDER_CREATED",
+  "timestamp": "..."
+}
+
+Use JSON. Do not change payload between brokers.
+
+5.3 Payment Worker
+Consume OrderCreated.
+
+Configurable behavior:
+- PAYMENT_DELAY_MS
+- controlled failure mode
+
+Example:
+- delay = 0
+- delay = 3000
+- fail first 2 attempts, succeed on attempt 3
+
+Record:
+- message received
+- processing started
+- processing succeeded/failed
+- retry attempt
+- processing completed
+
+6. BROKER ABSTRACTION
+
+Use a common abstraction so business logic stays unchanged.
+
+Conceptually:
+
+MessagePublisher
+  +-- RabbitMqPublisher
+  +-- ActiveMqPublisher
+  +-- KafkaPublisher
+
+Use a configuration such as:
+MQ_TYPE=rabbitmq
+MQ_TYPE=activemq
+MQ_TYPE=kafka
+
+The exact implementation is flexible, but application/business logic must
+remain equivalent across brokers.
+
+7. BROKER SETUPS
+
+RabbitMQ:
+- Docker container
+- Simple exchange/queue/routing-key model
+- Example:
+  exchange: order.exchange
+  queue: payment.queue
+  routing key: order.created
+
+ActiveMQ:
+- Docker container
+- Simple destination/queue for OrderCreated -> Payment Worker
+
+Kafka:
+- Docker-based Kafka setup
+- Topic: order.created
+- One consumer group for Payment Worker
+
+Record broker versions in README.
+
+8. FAIRNESS RULES
+
+All brokers must use:
+- same Order Service
+- same Payment Worker logic
+- same message payload
+- same test data
+- same load generator
+- same request count
+- same concurrency
+- same payment delay
+- same failure behavior
+- same number of repetitions
+- same machine/environment
+
+Only broker implementation/configuration should differ.
+
+Record:
+- broker version
+- application/runtime version
+- machine CPU/RAM
+- test parameters
+
+Do not optimize one broker heavily while leaving others at defaults unless
+the difference is documented and justified.
+
+9. TEST SCENARIOS
+
+TEST 1 - NORMAL WORKLOAD
+Purpose: baseline comparison.
+
+Suggested:
+- 1,000 orders
+- 50 concurrent users
+- Payment delay: 0 ms
+- Payment failure: disabled
+
+Run all three brokers.
+Recommended: 3 runs per broker.
+
+Collect:
+- average Order response latency
+- p95 Order response latency
+- throughput
+- error rate
+
+TEST 2 - SLOW PAYMENT
+Purpose: directly test whether Order is blocked by slow Payment.
+
+Suggested:
+- 1,000 orders
+- 50 concurrent users
+- Payment delay: 3,000 ms
+- Payment failure: disabled
+
+Optional baseline:
+Run the same scenario with synchronous HTTP:
+Order Service -> Payment Service -> response.
+
+For each broker collect:
+- average Order response latency
+- p95 Order response latency
+- throughput
+- timeout/error rate
+
+The key metric is Order response latency, not total payment completion time.
+
+TEST 3 - PAYMENT FAILURE AND RETRY
+Purpose: test retry/failure handling.
+
+Suggested:
+- 100 orders
+- 10 concurrent users
+- Payment fails on attempts 1 and 2
+- Payment succeeds on attempt 3
+
+Use equivalent retry behavior for all brokers.
+
+Collect:
+- successful payments
+- failed messages
+- retry count
+- lost messages, if any
+- total processing time
+- final success rate
+
+Do not compare one broker with automatic retries against another with no
+retry mechanism. Retry behavior must be equivalent.
+
+10. TEST METRICS
+
+Keep metrics focused:
+
+Primary:
+1. Average Order Response Time
+2. P95 Order Response Time
+3. Throughput
+4. Error/Timeout Rate
+5. Retry Success Rate
+
+Optional:
+- CPU
+- memory
+- message processing time
+
+11. TEST EXECUTION
+
+For each broker:
+1. Start broker and required application services.
+2. Verify health.
+3. Clear previous messages/data.
+4. Start Payment Worker.
+5. Run scenario.
+6. Collect benchmark output.
+7. Save logs/metrics.
+8. Repeat 3 times.
+9. Stop broker/application.
+10. Move to next broker.
+
+Matrix:
+- 3 brokers
+- 3 scenarios
+- 3 runs each
+- Total: 27 benchmark runs
+
+If execution time becomes an issue, reduce workload while keeping conditions
+identical across brokers.
+
+12. OPTIONAL SYNCHRONOUS BASELINE
+
+For Test 2, implement a very small baseline:
+
+Client -> Order Service -> Payment Service -> response
+
+Payment delay:
+3,000 ms
+
+Measure:
+- average response latency
+- p95 response latency
+- timeout/error rate
+
+Compare with:
+Client -> Order Service -> MQ -> HTTP 202
+while Payment processes asynchronously.
+
+13. DATA COLLECTION
+
+Create:
+
+results/
+  normal.csv
+  slow-payment.csv
+  retry.csv
+  summary.csv
+
+Suggested columns:
+broker,scenario,run,avg_latency_ms,p95_latency_ms,
+throughput,error_rate,retry_success_rate
+
+Keep raw results.
+Do not overwrite previous runs.
+Do not fabricate or estimate results.
+
+14. EXPECTED CODE DELIVERABLES
+
+Produce:
+1. Working source code.
+2. Docker Compose configuration.
+3. RabbitMQ configuration.
+4. ActiveMQ configuration.
+5. Kafka configuration.
+6. Order Service.
+7. Payment Worker.
+8. Common broker abstraction.
+9. k6 or equivalent benchmark scripts.
+10. Broker switching configuration/scripts.
+11. Test execution instructions.
+12. Raw benchmark results.
+13. README covering:
+    - architecture
+    - setup
+    - how to run each broker
+    - how to run each test
+    - result collection
+
+Do NOT create the final interview report.
+The code/PoC and raw experiment evidence are the main deliverables.
+
+15. EXPECTED RESULT TABLES
+
+Test 1 - Normal Workload
+
+Broker      Avg Latency    P95    Throughput    Error Rate
+RabbitMQ       ...          ...       ...            ...
+ActiveMQ       ...          ...       ...            ...
+Kafka          ...          ...       ...            ...
+
+Test 2 - Slow Payment
+
+Architecture/Broker   Avg Latency    P95    Timeout Rate
+Synchronous HTTP          ...          ...       ...
+RabbitMQ                  ...          ...       ...
+ActiveMQ                  ...          ...       ...
+Kafka                     ...          ...       ...
+
+Test 3 - Retry
+
+Broker      Success Rate    Retry Count    Lost Messages
+RabbitMQ       ...              ...             ...
+ActiveMQ       ...              ...             ...
+Kafka          ...              ...             ...
+
+Only report measured results.
+
+16. WHAT THE EXPERIMENT SHOULD PROVE
+
+The experiment should provide evidence about:
+- asynchronous order processing
+- Order Service response latency
+- behavior under slow Payment
+- basic throughput under the tested workload
+- failure/retry behavior
+
+The experiment should NOT claim to prove:
+- production-scale performance
+- Kubernetes-scale behavior
+- absolute maximum throughput of any broker
+- universal superiority of one broker
+- complete Inventory race-condition handling
+- complete Analytics architecture
+
+Those topics belong to technical analysis and architecture reasoning.
+
+17. RELATION TO THE FINAL REPORT
+
+Section 3 - Message Queue Evaluation:
+- technical comparison of RabbitMQ, ActiveMQ, Kafka
+
+Section 4 - Proof of Concept & Experiment:
+- setup
+- scenarios
+- metrics
+- implementation
+- measured results
+
+Section 5 - Analysis & Recommendation:
+- compare results against requirements
+- limitations/trade-offs
+- final recommendation
+
+Final recommendation must be based on:
+Technical evaluation
++
+Experimental evidence
++
+System requirements
+
+Do not select a broker before the experiment and then change the experiment
+to support that decision.
+
+18. IMPLEMENTATION PRIORITIES
+
+Priority 1:
+Get one complete flow working:
+Load Generator -> Order Service -> RabbitMQ -> Payment Worker
+
+Priority 2:
+Add ActiveMQ and Kafka using the same abstraction.
+
+Priority 3:
+Implement the three scenarios.
+
+Priority 4:
+Automate benchmark execution and result collection.
+
+Priority 5:
+Repeat tests and produce raw result files.
+
+Priority 6:
+Clean README and documentation.
+
+Keep the implementation minimal and reproducible.
+The purpose is to generate credible evidence for the interview task,
+not to build a production-ready e-commerce platform.

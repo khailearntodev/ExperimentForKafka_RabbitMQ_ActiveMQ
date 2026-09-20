@@ -1,0 +1,7 @@
+# Synchronous baseline test does not require a message broker.
+# Both Order Service and Mock Payment Service run as direct HTTP endpoints.
+# This file serves as documentation and anchor for the sync architecture baseline.
+services:
+  sync-note:
+    image: alpine:latest
+    command: echo "Sync baseline runs directly via 'npm run start:sync-payment' and 'npm run start:sync-order'"
