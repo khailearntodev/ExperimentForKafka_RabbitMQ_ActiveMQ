@@ -1,13 +1,6 @@
 # Message Queue Evaluation — RabbitMQ vs ActiveMQ vs Kafka
-
-## TECHLAB – DEV INTERVIEW 2026
-
-| | |
-|---|---|
-| **Position** | Intern Developer |
-| **Candidate** | Nguyen Quang Khai |
-| **Submission Date** | 21/09/2026 |
-| **Duration** | 2 weeks |
+Author: Nguyen Quang Khai 
+Target: This is for researching and find out the features of each service, and the situation is from ChatGPT
 
 ---
 
@@ -223,7 +216,7 @@ npm run start:order
 ```powershell
 docker compose -f docker/docker-compose.kafka.yml up -d
 # Tạo topic trước khi chạy consumer (yêu cầu bắt buộc cho Kafka)
-docker exec techlab-kafka /opt/kafka/bin/kafka-topics.sh --create --topic order.created --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --create --topic order.created --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
 $env:MQ_TYPE="kafka"
 npm run start:worker
 npm run start:order
