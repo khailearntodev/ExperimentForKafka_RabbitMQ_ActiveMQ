@@ -1,5 +1,7 @@
 # Message Queue Evaluation — RabbitMQ vs ActiveMQ vs Kafka
+
 Author: Nguyen Quang Khai 
+
 Target: This is for researching and find out the features of each service, and the situation is from ChatGPT
 
 ---
